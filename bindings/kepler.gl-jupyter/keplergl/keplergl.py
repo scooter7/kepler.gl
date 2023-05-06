@@ -30,7 +30,7 @@ def _gdf_to_dict(gdf):
     - dictionary: a dictionary variable that can be used in Kepler.gl
     '''
     # reproject to 4326 if needed
-    if gdf.crs and not gdf.crs == 4326:
+    if gdf.crs and gdf.crs != 4326:
         gdf = gdf.to_crs(4326)
 
     # get name of the geometry column
@@ -56,18 +56,19 @@ def data_to_json(data, manager):
 
     if data is None:
         return None
-    else:
-        if type(data) is not dict:
-            print(data)
-            raise Exception('data type incorrect expecting a dictionary mapping from data id to value, but got {}'.format(type(data)))
-            return None
-        else:
-            dataset = {}
-            for key, value in data.items():
-                normalized = _normalize_data(value)
-                dataset.update({key: normalized})
+    if type(data) is dict:
+        dataset = {}
+        for key, value in data.items():
+            normalized = _normalize_data(value)
+            dataset[key] = normalized
 
-            return dataset
+        return dataset
+
+    else:
+        print(data)
+        raise Exception(
+            f'data type incorrect expecting a dictionary mapping from data id to value, but got {type(data)}'
+        )
 
 def data_from_json(js, manager):
     '''Deserialize a Javascript date.'''
@@ -101,7 +102,7 @@ class KeplerGl(widgets.DOMWidget):
 
     def __init__(self, **kwargs):
         super(KeplerGl, self).__init__(**kwargs)
-        print('User Guide: {}'.format(documentation))
+        print(f'User Guide: {documentation}')
 
     @validate('data')
     def _validate_data(self, proposal):
@@ -112,12 +113,15 @@ class KeplerGl(widgets.DOMWidget):
         '''
 
         if type(proposal.value) is not dict:
-            raise DataException('[data type error]: Expecting a dictionary mapping from id to value, but got {}'.format(type(proposal.value)))
+            raise DataException(
+                f'[data type error]: Expecting a dictionary mapping from id to value, but got {type(proposal.value)}'
+            )
 
-        else:
-            for key, value in proposal.value.items():
-                if not isinstance(value, pd.DataFrame) and (type(value) is not str) and (type(value) is not dict):
-                     raise DataException('[data type error]: value of {} should be a DataFrame, a Geojson Dictionary or String, a csv String, but got {}'.format(key, type(value)))
+        for key, value in proposal.value.items():
+            if not isinstance(value, pd.DataFrame) and (type(value) is not str) and (type(value) is not dict):
+                raise DataException(
+                    f'[data type error]: value of {key} should be a DataFrame, a Geojson Dictionary or String, a csv String, but got {type(value)}'
+                )
 
         return proposal.value
 
@@ -161,15 +165,19 @@ class KeplerGl(widgets.DOMWidget):
         # find open of body
         k = keplergl_html.find("<body>")
 
-        data_to_add = data_to_json(self.data, None) if data == None else data_to_json(data, None)
-        config_to_add = self.config if config == None else config
+        data_to_add = (
+            data_to_json(self.data, None)
+            if data is None
+            else data_to_json(data, None)
+        )
+        config_to_add = self.config if config is None else config
 
         # for key in data_to_add:
         #     print(type(data_to_add[key]))
 
         keplergl_data = json.dumps({"config": config_to_add, "data": data_to_add, "options": {"readOnly": read_only, "centerMap": center_map}})
 
-        cmd = """window.__keplerglDataConfig = {};""".format(keplergl_data)
+        cmd = f"""window.__keplerglDataConfig = {keplergl_data};"""
         frame_txt = keplergl_html[:k] + "<body><script>" + cmd + "</script>" + keplergl_html[k+6:]
 
         return frame_txt.encode('utf-8')
@@ -199,4 +207,4 @@ class KeplerGl(widgets.DOMWidget):
         with open(file_name, 'wb') as f:
             f.write(frame_txt)
 
-        print("Map saved to {}!".format(file_name))
+        print(f"Map saved to {file_name}!")
